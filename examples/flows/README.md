@@ -11,6 +11,7 @@ They intentionally use the public authoring surface:
 
 - `echo.flow.ts`: one ACP step that returns a JSON reply
 - `branch.flow.ts`: constrained-choice classification using `decision()` and `decisionEdge()`, followed by a deterministic branch into either `continue` or `checkpoint`
+- `branch-structured-output.flow.ts`: the same branch shape using an ACP structured-output schema for the classifier instead of JSON-in-prompt instructions
 - `pr-triage/pr-triage.flow.ts`: a larger single-PR workflow example with a colocated written spec in `pr-triage/README.md`
 - `replay-viewer/`: a browser app that visualizes saved flow run bundles with React Flow, a recent-runs picker, ACP session inspection, and a dedicated viewer spec in `docs/2026-03-27-flow-replay-viewer.md`
 - `shell.flow.ts`: one native runtime-owned shell action that returns structured JSON
@@ -25,6 +26,10 @@ acpx flow run examples/flows/echo.flow.ts \
   --input-json '{"request":"Summarize this repository in one sentence."}'
 
 acpx flow run examples/flows/branch.flow.ts \
+  --input-json '{"task":"FIX: add a regression test for the reconnect bug"}'
+
+acpx flow run examples/flows/branch-structured-output.flow.ts \
+  --default-agent fast-agent \
   --input-json '{"task":"FIX: add a regression test for the reconnect bug"}'
 
 acpx --approve-all flow run examples/flows/pr-triage/pr-triage.flow.ts \
