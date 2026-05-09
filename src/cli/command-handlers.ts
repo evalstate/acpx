@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { Command, InvalidArgumentError } from "commander";
 import { isCodexInvocation } from "../acp/codex-compat.js";
+import { parseStrictJsonObject } from "../flows/json.js";
 import {
   mergePromptSourceWithText,
   parsePromptSource,
@@ -13,6 +14,7 @@ import {
   findSession,
   findSessionByDirectoryWalk,
 } from "../session/persistence.js";
+import { isJsonObject, type PromptRequestOptions } from "../structured-output.js";
 import { EXIT_CODES } from "../types.js";
 import type {
   OutputFormat,
@@ -49,6 +51,10 @@ class NoSessionError extends Error {
 type SessionModule = typeof import("../session/session.js");
 type OutputModule = typeof import("./output/output.js");
 type OutputRenderModule = typeof import("./output/render.js");
+
+type WritableLike = {
+  write(chunk: string): void;
+};
 
 let sessionModulePromise: Promise<SessionModule> | undefined;
 let outputModulePromise: Promise<OutputModule> | undefined;
@@ -221,6 +227,101 @@ async function findScopedSessionOrThrow(
   return record;
 }
 
+async function resolveStructuredPromptOptions(globalFlags: {
+  cwd: string;
+  structuredOutputSchema?: string;
+}): Promise<PromptRequestOptions | undefined> {
+  const schemaPath = globalFlags.structuredOutputSchema;
+  if (!schemaPath) {
+    return undefined;
+  }
+
+  const resolved = path.resolve(globalFlags.cwd, schemaPath);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await fs.readFile(resolved, "utf8"));
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new InvalidArgumentError(`Structured output schema must contain valid JSON: ${detail}`);
+  }
+
+  if (!isJsonObject(parsed)) {
+    throw new InvalidArgumentError("Structured output schema must be a JSON object");
+  }
+
+  return {
+    structuredOutput: {
+      schema: parsed,
+    },
+  };
+}
+
+function createCaptureOutput(
+  createOutputFormatter: OutputModule["createOutputFormatter"],
+  errorFormat: OutputFormat,
+  errorOptions: Parameters<OutputModule["createOutputFormatter"]>[1],
+): {
+  formatter: ReturnType<OutputModule["createOutputFormatter"]>;
+  read: () => string;
+} {
+  const chunks: string[] = [];
+  const stdout: WritableLike = {
+    write(chunk: string) {
+      chunks.push(chunk);
+    },
+  };
+
+  const captureFormatter = createOutputFormatter("quiet", { stdout });
+  const errorFormatter = createOutputFormatter(errorFormat, errorOptions);
+
+  return {
+    formatter: {
+      setContext(context) {
+        captureFormatter.setContext(context);
+        errorFormatter.setContext(context);
+      },
+      onAcpMessage(message) {
+        captureFormatter.onAcpMessage(message);
+      },
+      onError(params) {
+        errorFormatter.onError(params);
+      },
+      flush() {
+        errorFormatter.flush();
+      },
+    },
+    read: () => chunks.join("").trim(),
+  };
+}
+
+function printStructuredOutputByFormat(
+  parsed: unknown,
+  result: {
+    sessionId: string;
+    stopReason: string;
+  },
+  format: OutputFormat,
+): void {
+  if (format === "json") {
+    process.stdout.write(
+      `${JSON.stringify({
+        action: "structured_output",
+        sessionId: result.sessionId,
+        stopReason: result.stopReason,
+        output: parsed,
+      })}\n`,
+    );
+    return;
+  }
+
+  const spacing = format === "text" ? 2 : 0;
+  process.stdout.write(`${JSON.stringify(parsed, null, spacing)}\n`);
+}
+
+function parseCapturedStructuredOutput(captured: string): unknown {
+  return parseStrictJsonObject(captured);
+}
+
 async function findRoutedSessionOrThrow(
   agentCommand: string,
   agentName: string,
@@ -259,6 +360,10 @@ export async function handlePrompt(
   const globalFlags = resolveGlobalFlags(command, config);
   const outputPolicy = resolveRequestedOutputPolicy(globalFlags);
   const permissionMode = resolvePermissionMode(globalFlags, config.defaultPermissions);
+  const promptOptions = await resolveStructuredPromptOptions(globalFlags);
+  if (promptOptions && flags.wait === false) {
+    throw new InvalidArgumentError("--structured-output-schema cannot be combined with --no-wait");
+  }
   const prompt = await readPrompt(promptParts, flags.file, globalFlags.cwd);
   const agent = resolveAgentInvocation(explicitAgentName, globalFlags, config);
   const [
@@ -272,17 +377,26 @@ export async function handlePrompt(
     agent.cwd,
     flags.session,
   );
-  const outputFormatter = createOutputFormatter(outputPolicy.format, {
+  const formatterOptions = {
     jsonContext: {
       sessionId: record.acpxRecordId,
     },
     suppressReads: outputPolicy.suppressReads,
-  });
+  };
+  const capture = promptOptions
+    ? createCaptureOutput(createOutputFormatter, outputPolicy.format, formatterOptions)
+    : undefined;
+  const outputFormatter =
+    capture?.formatter ??
+    createOutputFormatter(outputPolicy.format, formatterOptions);
 
-  await printPromptSessionBanner(record, agent.cwd, outputPolicy.format, outputPolicy.jsonStrict);
+  if (!promptOptions) {
+    await printPromptSessionBanner(record, agent.cwd, outputPolicy.format, outputPolicy.jsonStrict);
+  }
   const result = await sendSession({
     sessionId: record.acpxRecordId,
     prompt,
+    promptOptions,
     mcpServers: config.mcpServers,
     permissionMode,
     nonInteractivePermissions: globalFlags.nonInteractivePermissions,
@@ -291,7 +405,7 @@ export async function handlePrompt(
     terminal: globalFlags.terminal,
     outputFormatter,
     errorEmissionPolicy: {
-      queueErrorAlreadyEmitted: outputPolicy.queueErrorAlreadyEmitted,
+      queueErrorAlreadyEmitted: capture ? false : outputPolicy.queueErrorAlreadyEmitted,
     },
     suppressSdkConsoleErrors: outputPolicy.suppressSdkConsoleErrors,
     timeoutMs: globalFlags.timeout,
@@ -311,6 +425,14 @@ export async function handlePrompt(
   if ("queued" in result) {
     printQueuedPromptByFormat(result, outputPolicy.format);
     return;
+  }
+
+  if (promptOptions && capture) {
+    printStructuredOutputByFormat(
+      parseCapturedStructuredOutput(capture.read()),
+      result,
+      outputPolicy.format,
+    );
   }
 
   applyPermissionExitCode(result);
@@ -353,20 +475,28 @@ export async function handleExec(
   const globalFlags = resolveGlobalFlags(command, config);
   const outputPolicy = resolveRequestedOutputPolicy(globalFlags);
   const permissionMode = resolvePermissionMode(globalFlags, config.defaultPermissions);
+  const promptOptions = await resolveStructuredPromptOptions(globalFlags);
   const prompt = await readPrompt(promptParts, flags.file, globalFlags.cwd);
   const [{ createOutputFormatter }, { runOnce }] = await Promise.all([
     loadOutputModule(),
     loadSessionModule(),
   ]);
-  const outputFormatter = createOutputFormatter(outputPolicy.format, {
+  const formatterOptions = {
     suppressReads: outputPolicy.suppressReads,
-  });
+  };
+  const capture = promptOptions
+    ? createCaptureOutput(createOutputFormatter, outputPolicy.format, formatterOptions)
+    : undefined;
+  const outputFormatter =
+    capture?.formatter ??
+    createOutputFormatter(outputPolicy.format, formatterOptions);
   const agent = resolveAgentInvocation(explicitAgentName, globalFlags, config);
 
   const result = await runOnce({
     agentCommand: agent.agentCommand,
     cwd: agent.cwd,
     prompt,
+    promptOptions,
     mcpServers: config.mcpServers,
     permissionMode,
     nonInteractivePermissions: globalFlags.nonInteractivePermissions,
@@ -385,6 +515,14 @@ export async function handleExec(
       systemPrompt: globalFlags.systemPrompt,
     },
   });
+
+  if (promptOptions && capture) {
+    printStructuredOutputByFormat(
+      parseCapturedStructuredOutput(capture.read()),
+      result,
+      outputPolicy.format,
+    );
+  }
 
   applyPermissionExitCode(result);
 }

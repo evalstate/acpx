@@ -54,6 +54,15 @@ const acpSessionSchema = extensibleObject({
   isolated: z.boolean().optional(),
 });
 
+const acpStructuredOutputSchema = extensibleObject({
+  schema: z.union([
+    z.record(z.string(), z.unknown()),
+    functionSchema<
+      Extract<Exclude<AcpNodeDefinition["structuredOutput"], undefined>["schema"], Function>
+    >("structuredOutput.schema"),
+  ]),
+});
+
 const acpNodeSchema = extensibleObject({
   ...flowNodeCommonShape,
   nodeType: z.literal("acp"),
@@ -65,6 +74,7 @@ const acpNodeSchema = extensibleObject({
     ])
     .optional(),
   session: acpSessionSchema.optional(),
+  structuredOutput: acpStructuredOutputSchema.optional(),
   prompt: functionSchema<AcpNodeDefinition["prompt"]>("prompt"),
   parse: functionSchema<NonNullable<AcpNodeDefinition["parse"]>>("parse").optional(),
 });

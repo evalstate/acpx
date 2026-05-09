@@ -49,7 +49,7 @@ const unsafeCodeCharEscapes = Object.freeze({
 
 type CliRunResult = {
   code: number | null;
-  signal: NodeJS.Signals | null;
+  signal: string | null;
   stdout: string;
   stderr: string;
 };
@@ -748,6 +748,33 @@ test("integration: factory-droid alias resolves to droid exec --output-format ac
   });
 });
 
+test("integration: built-in fast-agent resolves to fast-agent-acp", async () => {
+  await withTempHome(async (homeDir) => {
+    const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "acpx-integration-cwd-"));
+    const fakeBinDir = await fs.mkdtemp(path.join(os.tmpdir(), "acpx-fake-fast-agent-"));
+
+    try {
+      await writeFakeFastAgentAcp(fakeBinDir);
+
+      const result = await runCli(
+        ["--approve-all", "--cwd", cwd, "--format", "quiet", "fast-agent", "exec", "echo hello"],
+        homeDir,
+        {
+          env: {
+            PATH: `${fakeBinDir}${path.delimiter}${process.env.PATH ?? ""}`,
+          },
+        },
+      );
+
+      assert.equal(result.code, 0, result.stderr);
+      assert.match(result.stdout, /hello/);
+    } finally {
+      await fs.rm(fakeBinDir, { recursive: true, force: true });
+      await fs.rm(cwd, { recursive: true, force: true });
+    }
+  });
+});
+
 test("integration: built-in iflow agent resolves to iflow --experimental-acp", async () => {
   await withTempHome(async (homeDir) => {
     const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "acpx-integration-cwd-"));
@@ -952,6 +979,200 @@ test("integration: exec --no-terminal disables advertised terminal capability", 
       assert(initializeRequest, result.stdout);
       assert.equal(initializeRequest.params?.clientCapabilities?.terminal, false);
     } finally {
+      await fs.rm(cwd, { recursive: true, force: true });
+    }
+  });
+});
+
+test("integration: exec sends structured output schema metadata and parses final JSON", async () => {
+  await withTempHome(async (homeDir) => {
+    const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "acpx-integration-cwd-"));
+    const schemaPath = path.join(cwd, "schema.json");
+    const schema = {
+      type: "object",
+      properties: {
+        meta: {
+          type: "object",
+        },
+      },
+      required: ["meta"],
+    };
+
+    try {
+      await fs.writeFile(schemaPath, JSON.stringify(schema), "utf8");
+
+      const result = await runCli(
+        [
+          "--agent",
+          `${MOCK_AGENT_COMMAND} --advertise-structured-output`,
+          "--approve-all",
+          "--cwd",
+          cwd,
+          "--format",
+          "json",
+          "--structured-output-schema",
+          schemaPath,
+          "exec",
+          "inspect-structured-output",
+        ],
+        homeDir,
+      );
+      assert.equal(result.code, 0, result.stderr);
+
+      const payload = JSON.parse(result.stdout.trim()) as {
+        action?: string;
+        stopReason?: string;
+        output?: {
+          meta?: unknown;
+        };
+      };
+      assert.equal(payload.action, "structured_output");
+      assert.equal(payload.stopReason, "end_turn");
+      assert.deepEqual(payload.output?.meta, {
+        "co.huggingface": {
+          structuredOutput: {
+            schema,
+            mode: "bestEffort",
+          },
+        },
+      });
+    } finally {
+      await fs.rm(cwd, { recursive: true, force: true });
+    }
+  });
+});
+
+test("integration: structured output requires advertised agent capability", async () => {
+  await withTempHome(async (homeDir) => {
+    const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "acpx-integration-cwd-"));
+    const schemaPath = path.join(cwd, "schema.json");
+
+    try {
+      await fs.writeFile(schemaPath, JSON.stringify({ type: "object" }), "utf8");
+
+      const result = await runCli(
+        [
+          ...baseAgentArgs(cwd),
+          "--format",
+          "json",
+          "--structured-output-schema",
+          schemaPath,
+          "exec",
+          "echo hello",
+        ],
+        homeDir,
+      );
+      assert.equal(result.code, 1);
+      const payload = JSON.parse(result.stdout.trim()) as {
+        error?: {
+          message?: string;
+        };
+      };
+      assert.match(
+        payload.error?.message ?? "",
+        /does not advertise support for co\.huggingface\.structuredOutput/,
+      );
+    } finally {
+      await fs.rm(cwd, { recursive: true, force: true });
+    }
+  });
+});
+
+test("integration: persistent structured output emits queue owner errors", async () => {
+  await withTempHome(async (homeDir) => {
+    const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "acpx-integration-cwd-"));
+    const schemaPath = path.join(cwd, "schema.json");
+    const args = [...baseAgentArgs(cwd), "--format", "json"];
+
+    try {
+      await fs.writeFile(schemaPath, JSON.stringify({ type: "object" }), "utf8");
+
+      const created = await runCli([...args, "sessions", "new"], homeDir);
+      assert.equal(created.code, 0, created.stderr);
+
+      const result = await runCli(
+        [
+          ...args,
+          "--ttl",
+          "1",
+          "prompt",
+          "--structured-output-schema",
+          schemaPath,
+          "echo hello",
+        ],
+        homeDir,
+      );
+      assert.equal(result.code, 1);
+      assert.notEqual(result.stdout.trim(), "");
+
+      const payload = JSON.parse(result.stdout.trim()) as {
+        error?: {
+          message?: string;
+        };
+      };
+      assert.match(
+        payload.error?.message ?? "",
+        /does not advertise support for co\.huggingface\.structuredOutput/,
+      );
+    } finally {
+      await runCli([...baseAgentArgs(cwd), "--format", "quiet", "sessions", "close"], homeDir).catch(
+        () => {},
+      );
+      await fs.rm(cwd, { recursive: true, force: true });
+    }
+  });
+});
+
+test("integration: persistent structured output preserves schema metadata through queue owner", async () => {
+  await withTempHome(async (homeDir) => {
+    const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "acpx-integration-cwd-"));
+    const schemaPath = path.join(cwd, "schema.json");
+    const schema = { type: "object" };
+    const args = [
+      "--agent",
+      `${MOCK_AGENT_COMMAND} --advertise-structured-output`,
+      "--approve-all",
+      "--cwd",
+      cwd,
+    ];
+
+    try {
+      await fs.writeFile(schemaPath, JSON.stringify(schema), "utf8");
+
+      const created = await runCli([...args, "sessions", "new"], homeDir);
+      assert.equal(created.code, 0, created.stderr);
+
+      const result = await runCli(
+        [
+          ...args,
+          "--format",
+          "json",
+          "--ttl",
+          "1",
+          "prompt",
+          "--structured-output-schema",
+          schemaPath,
+          "inspect-structured-output",
+        ],
+        homeDir,
+      );
+      assert.equal(result.code, 0, result.stderr);
+
+      const payload = JSON.parse(result.stdout.trim()) as {
+        output?: {
+          meta?: unknown;
+        };
+      };
+      assert.deepEqual(payload.output?.meta, {
+        "co.huggingface": {
+          structuredOutput: {
+            schema,
+            mode: "bestEffort",
+          },
+        },
+      });
+    } finally {
+      await runCli([...args, "--format", "quiet", "sessions", "close"], homeDir).catch(() => {});
       await fs.rm(cwd, { recursive: true, force: true });
     }
   });
@@ -3151,6 +3372,23 @@ async function writeFakeDroidAgent(binDir: string): Promise<void> {
   );
 }
 
+async function writeFakeFastAgentAcp(binDir: string): Promise<void> {
+  if (process.platform === "win32") {
+    await fs.writeFile(
+      path.join(binDir, "fast-agent-acp.cmd"),
+      [`@echo off`, "setlocal", `"${process.execPath}" "${MOCK_AGENT_PATH}" %*`, ""].join("\r\n"),
+      { encoding: "utf8" },
+    );
+    return;
+  }
+
+  await fs.writeFile(
+    path.join(binDir, "fast-agent-acp"),
+    ["#!/bin/sh", `exec "${process.execPath}" "${MOCK_AGENT_PATH}" "$@"`, ""].join("\n"),
+    { encoding: "utf8", mode: 0o755 },
+  );
+}
+
 async function writeFakeIflowAgent(binDir: string): Promise<void> {
   if (process.platform === "win32") {
     await fs.writeFile(
@@ -3555,7 +3793,7 @@ async function waitForPromptDoneEvent(
       stderr += chunk;
     };
 
-    const onClose = (code: number | null, signal: NodeJS.Signals | null): void => {
+    const onClose = (code: number | null, signal: string | null): void => {
       flushLineBuffer();
       if (settled) {
         return;

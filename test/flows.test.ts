@@ -737,6 +737,79 @@ test("FlowRunner writes isolated ACP bundle traces and artifacts", async () => {
   });
 });
 
+test("FlowRunner sends ACP structured-output metadata for structured ACP nodes", async () => {
+  await withTempHome(async () => {
+    const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "acpx-flow-structured-output-"));
+    const outputRoot = await fs.mkdtemp(path.join(os.tmpdir(), "acpx-flow-store-"));
+    const schema = {
+      type: "object",
+      properties: {
+        meta: {
+          type: "object",
+        },
+      },
+      required: ["meta"],
+    };
+
+    try {
+      const runner = new FlowRunner({
+        resolveAgent: () => ({
+          agentName: "mock",
+          agentCommand: `${MOCK_AGENT_COMMAND} --advertise-structured-output`,
+          cwd,
+        }),
+        permissionMode: "approve-all",
+        outputRoot,
+      });
+
+      const flow = defineFlow({
+        name: "structured-output-test",
+        startAt: "only",
+        nodes: {
+          only: acp({
+            session: {
+              isolated: true,
+            },
+            structuredOutput: {
+              schema,
+            },
+            prompt: () => "inspect-structured-output",
+            parse: (text) => parseStrictJsonObject(text),
+          }),
+        },
+        edges: [],
+      });
+
+      const result = await runner.run(flow, {});
+      assert.equal(result.state.status, "completed");
+      assert.deepEqual(result.state.outputs.only, {
+        meta: {
+          "co.huggingface": {
+            structuredOutput: {
+              schema,
+              mode: "bestEffort",
+            },
+          },
+        },
+      });
+
+      const flowSnapshot = JSON.parse(
+        await fs.readFile(path.join(result.runDir, "flow.json"), "utf8"),
+      ) as {
+        nodes?: {
+          only?: {
+            hasStructuredOutput?: boolean;
+          };
+        };
+      };
+      assert.equal(flowSnapshot.nodes?.only?.hasStructuredOutput, true);
+    } finally {
+      await fs.rm(cwd, { recursive: true, force: true });
+      await fs.rm(outputRoot, { recursive: true, force: true });
+    }
+  });
+});
+
 test("FlowRunner writes persistent ACP bundle traces and session bindings", async () => {
   await withTempHome(async () => {
     const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "acpx-flow-persistent-trace-"));

@@ -1,5 +1,6 @@
 import type { AcpClient } from "../../acp/client.js";
 import type { SessionAgentOptions } from "../../runtime/engine/session-options.js";
+import type { PromptRequestOptions } from "../../structured-output.js";
 import type {
   AcpJsonRpcMessage,
   AcpMessageDirection,
@@ -53,6 +54,7 @@ export type RunOnceOptions = {
   verbose?: boolean;
   sessionOptions?: SessionAgentOptions;
   promptRetries?: number;
+  promptOptions?: PromptRequestOptions;
 } & TimedRunOptions;
 
 export type SessionCreateOptions = {
@@ -93,6 +95,7 @@ export type SessionSendOptions = {
   client?: AcpClient;
   promptRetries?: number;
   sessionOptions?: SessionAgentOptions;
+  promptOptions?: PromptRequestOptions;
 } & TimedRunOptions;
 
 export type SessionEnsureOptions = {

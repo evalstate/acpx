@@ -80,6 +80,7 @@ Friendly agent names resolve to commands:
 - `cursor` -> `cursor-agent acp`
 - `copilot` -> `copilot --acp --stdio`
 - `droid` -> `droid exec --output-format acp` (`factory-droid` and `factorydroid` also resolve to `droid`)
+- `fast-agent` -> `fast-agent-acp`
 - `iflow` -> `iflow --experimental-acp`
 - `kilocode` -> `npx -y @kilocode/cli acp`
 - `kimi` -> `kimi acp`
@@ -204,6 +205,7 @@ Behavior:
 - `--timeout <seconds>`: max wait time (positive number)
 - `--ttl <seconds>`: queue owner idle TTL before shutdown (default `300`, `0` disables TTL)
 - `--model <id>`: request an agent model during session creation; non-Claude agents must advertise ACP models and support `session/set_model`
+- `--structured-output-schema <path>`: request experimental structured JSON output with a JSON Schema file; `acpx` captures the completed assistant text and parses strict JSON
 - `--verbose`: verbose ACP/debug logs to stderr
 
 Permission flags are mutually exclusive.
@@ -281,6 +283,10 @@ Use `--format <fmt>`:
 - `text` (default): human-readable stream with updates/tool status and done line
 - `json`: NDJSON event stream (good for automation)
 - `quiet`: final assistant text only
+- `--structured-output-schema <path>`: for agents that advertise
+  `co.huggingface.structuredOutput`, send the schema on `session/prompt`,
+  capture the completed assistant text, parse it as strict JSON, and print the
+  parsed payload. This MVP checks JSON syntax only, not schema conformance.
 - `--suppress-reads`: replace raw read-file contents with `[read output suppressed]` in `text` and `json` output
 
 Example automation:

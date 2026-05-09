@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { SetSessionConfigOptionResponse } from "@agentclientprotocol/sdk";
 import { QueueConnectionError, QueueProtocolError } from "../../errors.js";
 import { incrementPerfCounter } from "../../perf-metrics.js";
+import type { PromptRequestOptions } from "../../structured-output.js";
 import type {
   AcpClientOptions,
   NonInteractivePermissionPolicy,
@@ -263,6 +264,7 @@ export type SubmitToQueueOwnerOptions = {
   sessionId: string;
   message: string;
   prompt?: PromptInput;
+  promptOptions?: PromptRequestOptions;
   permissionMode: PermissionMode;
   resumePolicy?: SessionResumePolicy;
   nonInteractivePermissions?: NonInteractivePermissionPolicy;
@@ -286,6 +288,7 @@ async function submitToQueueOwner(
     ownerGeneration: owner.ownerGeneration,
     message: options.message,
     prompt: options.prompt,
+    promptOptions: options.promptOptions,
     permissionMode: options.permissionMode,
     resumePolicy: options.resumePolicy,
     nonInteractivePermissions: options.nonInteractivePermissions,
@@ -324,7 +327,7 @@ async function submitToQueueOwner(
         const queueErrorAlreadyEmitted =
           options.errorEmissionPolicy?.queueErrorAlreadyEmitted ?? true;
         const outputAlreadyEmitted = message.outputAlreadyEmitted === true;
-        const shouldEmitInFormatter = !outputAlreadyEmitted || !queueErrorAlreadyEmitted;
+        const shouldEmitInFormatter = queueErrorAlreadyEmitted && !outputAlreadyEmitted;
         if (shouldEmitInFormatter) {
           options.outputFormatter.onError({
             code: message.code ?? "RUNTIME",
@@ -343,7 +346,9 @@ async function submitToQueueOwner(
             origin: message.origin ?? "queue",
             retryable: message.retryable,
             acp: message.acp,
-            ...(queueErrorAlreadyEmitted ? { outputAlreadyEmitted: true } : {}),
+            ...(shouldEmitInFormatter || (queueErrorAlreadyEmitted && outputAlreadyEmitted)
+              ? { outputAlreadyEmitted: true }
+              : {}),
           }),
         );
         return;

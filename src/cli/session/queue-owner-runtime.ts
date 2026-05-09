@@ -51,6 +51,7 @@ async function submitToRunningOwner(
     sessionId: options.sessionId,
     message: promptToDisplayText(options.prompt),
     prompt: options.prompt,
+    promptOptions: options.promptOptions,
     permissionMode: options.permissionMode,
     nonInteractivePermissions: options.nonInteractivePermissions,
     outputFormatter: options.outputFormatter,

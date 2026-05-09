@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 
+import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
 import { writeFileSync } from "node:fs";
-import { Readable, Writable } from "node:stream";
+import { Writable } from "node:stream";
 import {
   AgentSideConnection,
   type CloseSessionRequest,
@@ -53,6 +54,7 @@ type MockAgentOptions = {
   replayLoadSessionUpdates: boolean;
   loadReplayText: string;
   ignoreSigterm: boolean;
+  advertiseStructuredOutput: boolean;
 };
 
 type SessionState = {
@@ -321,6 +323,7 @@ function parseMockAgentOptions(argv: string[]): MockAgentOptions {
   let loadReplayText = "replayed load session update";
   let ignoreSigterm = false;
   let hangOnNewSession = false;
+  let advertiseStructuredOutput = false;
 
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
@@ -376,6 +379,11 @@ function parseMockAgentOptions(argv: string[]): MockAgentOptions {
 
     if (token === "--advertise-config-options") {
       advertiseConfigOptions = true;
+      continue;
+    }
+
+    if (token === "--advertise-structured-output") {
+      advertiseStructuredOutput = true;
       continue;
     }
 
@@ -456,6 +464,7 @@ function parseMockAgentOptions(argv: string[]): MockAgentOptions {
     replayLoadSessionUpdates,
     loadReplayText,
     ignoreSigterm,
+    advertiseStructuredOutput,
   };
 }
 
@@ -541,11 +550,23 @@ class MockAgent implements Agent {
   }
 
   async initialize(): Promise<InitializeResponse> {
+    const agentCapabilities: InitializeResponse["agentCapabilities"] = this.options
+      .supportsLoadSession
+      ? { loadSession: true }
+      : {};
+    if (this.options.advertiseStructuredOutput) {
+      agentCapabilities._meta = {
+        "co.huggingface": {
+          structuredOutput: true,
+        },
+      };
+    }
+
     return {
       protocolVersion: PROTOCOL_VERSION,
       authMethods: [],
       agentCapabilities: {
-        ...(this.options.supportsLoadSession ? { loadSession: true } : {}),
+        ...agentCapabilities,
         ...(this.options.supportsCloseSession ? { sessionCapabilities: { close: {} } } : {}),
       },
     };
@@ -630,7 +651,7 @@ class MockAgent implements Agent {
     return response;
   }
 
-  async closeSession(params: CloseSessionRequest): Promise<CloseSessionResponse> {
+  async unstable_closeSession(params: CloseSessionRequest): Promise<CloseSessionResponse> {
     this.sessions.delete(params.sessionId);
     if (this.options.closeSessionMarker) {
       writeFileSync(this.options.closeSessionMarker, `${params.sessionId}\n`, { flag: "a" });
@@ -699,9 +720,11 @@ class MockAgent implements Agent {
 
     try {
       const response =
-        text === "inspect-prompt"
-          ? describePromptBlocks(params.prompt)
-          : await this.handlePrompt(params.sessionId, text, promptAbort.signal);
+        text === "inspect-structured-output"
+          ? JSON.stringify({ meta: params._meta ?? null })
+          : text === "inspect-prompt"
+            ? describePromptBlocks(params.prompt)
+            : await this.handlePrompt(params.sessionId, text, promptAbort.signal);
       session.hasCompletedPrompt = true;
       await this.sendAssistantMessage(params.sessionId, response);
       return { stopReason: "end_turn" };
@@ -1108,8 +1131,28 @@ class MockAgent implements Agent {
   }
 }
 
+function stdinReadableStream(): ReadableStream<Uint8Array> {
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      process.stdin.on("data", (chunk: Buffer | string) => {
+        controller.enqueue(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+      });
+      process.stdin.once("end", () => {
+        controller.close();
+      });
+      process.stdin.once("error", (error) => {
+        controller.error(error);
+      });
+      process.stdin.resume();
+    },
+    cancel() {
+      process.stdin.pause();
+    },
+  });
+}
+
 const output = Writable.toWeb(process.stdout);
-const input = Readable.toWeb(process.stdin) as ReadableStream<Uint8Array>;
+const input = stdinReadableStream();
 const stream = ndJsonStream(output, input);
 const mockAgentOptions = parseMockAgentOptions(process.argv.slice(2));
 
@@ -1123,4 +1166,9 @@ const connection = new AgentSideConnection(
   (agentConnection) => new MockAgent(agentConnection, mockAgentOptions),
   stream,
 );
-void connection;
+const keepAlive = setInterval(() => {}, 60_000);
+try {
+  await connection.closed;
+} finally {
+  clearInterval(keepAlive);
+}

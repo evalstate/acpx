@@ -37,6 +37,7 @@ One command surface for Pi, OpenClaw ACP, Codex, Claude, and other ACP-compatibl
 - **Client methods**: stable `fs/*` and `terminal/*` handlers with permission controls and cwd sandboxing
 - **Auth handshake**: stable `authenticate` support via env/config credentials
 - **Structured output**: typed ACP messages (thinking, tool calls, diffs) instead of ANSI scraping
+- **Experimental schema output**: request structured JSON with `--structured-output-schema`
 - **Any ACP agent**: built-in registry + `--agent` escape hatch for custom servers
 - **One-shot mode**: `exec` for stateless fire-and-forget tasks
 - **Experimental flows**: `flow run <file>` for TypeScript workflow modules over multiple prompts
@@ -211,6 +212,7 @@ acpx flow run ./my-flow.ts --input-file ./flow-input.json
 acpx --timeout 1800 flow run ./my-flow.ts
 acpx --format quiet codex 'final recommendation only'
 acpx --suppress-reads codex exec 'show tool activity without dumping file bodies'
+acpx --agent './my-acp-agent' --structured-output-schema schema.json exec 'extract fields'
 
 acpx --timeout 90 codex 'investigate intermittent test timeout'
 acpx --ttl 30 codex 'keep queue owner alive for quick follow-ups'
@@ -233,6 +235,8 @@ Flows are for multi-step ACP work where one prompt is not enough:
 The source tree includes flow examples under [examples/flows/README.md](examples/flows/README.md):
 
 - small examples such as `echo`, `branch`, `shell`, `workdir`, and `two-turn`
+- `structured-output.flow.ts` for mixing plain-text ACP turns with one
+  experimental structured-output turn
 - a larger PR-triage example under [examples/flows/pr-triage/README.md](examples/flows/pr-triage/README.md)
 - a replay viewer under [examples/flows/replay-viewer/README.md](examples/flows/replay-viewer/README.md) for inspecting saved run bundles in the browser
 
@@ -305,11 +309,18 @@ acpx --format quiet codex 'give me a 3-line summary'
 
 # suppress read payloads while keeping the selected output format
 acpx --suppress-reads codex exec 'inspect the repo and report tool usage'
+
+# structured-output schema: capture final assistant text and parse strict JSON
+acpx --agent './my-acp-agent' --structured-output-schema schema.json exec 'extract fields'
 ```
 
 - `text`: human-readable stream with assistant text and tool updates
 - `json`: raw ACP NDJSON stream for automation
 - `quiet`: final assistant text only
+- `--structured-output-schema <path>`: for agents that advertise the experimental
+  `co.huggingface.structuredOutput` extension, send a JSON Schema, capture the
+  completed assistant text, parse it as strict JSON, and print the parsed
+  payload. This MVP checks JSON syntax only, not schema conformance.
 - `--suppress-reads`: replace raw read-file contents with `[read output suppressed]` in `text` and `json` output
 
 JSON events include a stable envelope for correlation:
@@ -335,24 +346,25 @@ unless `agentSessionId` is present.
 
 Built-ins:
 
-| Agent      | Adapter                                                                     | Wraps                                                                                                           |
-| ---------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `pi`       | [pi-acp](https://github.com/svkozak/pi-acp)                                 | [Pi Coding Agent](https://github.com/mariozechner/pi)                                                           |
-| `openclaw` | native (`openclaw acp`)                                                     | [OpenClaw ACP bridge](https://github.com/openclaw/openclaw)                                                     |
-| `codex`    | [codex-acp](https://github.com/zed-industries/codex-acp)                    | [Codex CLI](https://codex.openai.com)                                                                           |
-| `claude`   | [claude-agent-acp](https://github.com/agentclientprotocol/claude-agent-acp) | [Claude Code](https://claude.ai/code)                                                                           |
-| `gemini`   | native (`gemini --acp`)                                                     | [Gemini CLI](https://github.com/google/gemini-cli)                                                              |
-| `cursor`   | native (`cursor-agent acp`)                                                 | [Cursor CLI](https://cursor.com/docs/cli/acp)                                                                   |
-| `copilot`  | native (`copilot --acp --stdio`)                                            | [GitHub Copilot CLI](https://docs.github.com/copilot/how-tos/copilot-chat/use-copilot-chat-in-the-command-line) |
-| `droid`    | native (`droid exec --output-format acp`)                                   | [Factory Droid](https://www.factory.ai)                                                                         |
-| `iflow`    | native (`iflow --experimental-acp`)                                         | [iFlow CLI](https://github.com/iflow-ai/iflow-cli)                                                              |
-| `kilocode` | `npx -y @kilocode/cli acp`                                                  | [Kilocode](https://kilocode.ai)                                                                                 |
-| `kimi`     | native (`kimi acp`)                                                         | [Kimi CLI](https://github.com/MoonshotAI/kimi-cli)                                                              |
-| `kiro`     | native (`kiro-cli-chat acp`)                                                | [Kiro CLI](https://kiro.dev)                                                                                    |
-| `opencode` | `npx -y opencode-ai acp`                                                    | [OpenCode](https://opencode.ai)                                                                                 |
-| `qoder`    | native (`qodercli --acp`)                                                   | [Qoder CLI](https://docs.qoder.com/cli/acp)                                                                     |
-| `qwen`     | native (`qwen --acp`)                                                       | [Qwen Code](https://github.com/QwenLM/qwen-code)                                                                |
-| `trae`     | native (`traecli acp serve`)                                                | [Trae CLI](https://docs.trae.cn/cli)                                                                            |
+| Agent        | Adapter                                                                     | Wraps                                                                                                           |
+| ------------ | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `pi`         | [pi-acp](https://github.com/svkozak/pi-acp)                                 | [Pi Coding Agent](https://github.com/mariozechner/pi)                                                           |
+| `openclaw`   | native (`openclaw acp`)                                                     | [OpenClaw ACP bridge](https://github.com/openclaw/openclaw)                                                     |
+| `codex`      | [codex-acp](https://github.com/zed-industries/codex-acp)                    | [Codex CLI](https://codex.openai.com)                                                                           |
+| `claude`     | [claude-agent-acp](https://github.com/agentclientprotocol/claude-agent-acp) | [Claude Code](https://claude.ai/code)                                                                           |
+| `gemini`     | native (`gemini --acp`)                                                     | [Gemini CLI](https://github.com/google/gemini-cli)                                                              |
+| `cursor`     | native (`cursor-agent acp`)                                                 | [Cursor CLI](https://cursor.com/docs/cli/acp)                                                                   |
+| `copilot`    | native (`copilot --acp --stdio`)                                            | [GitHub Copilot CLI](https://docs.github.com/copilot/how-tos/copilot-chat/use-copilot-chat-in-the-command-line) |
+| `droid`      | native (`droid exec --output-format acp`)                                   | [Factory Droid](https://www.factory.ai)                                                                         |
+| `fast-agent` | native (`fast-agent-acp`)                                                   | [fast-agent](https://github.com/evalstate/fast-agent)                                                           |
+| `iflow`      | native (`iflow --experimental-acp`)                                         | [iFlow CLI](https://github.com/iflow-ai/iflow-cli)                                                              |
+| `kilocode`   | `npx -y @kilocode/cli acp`                                                  | [Kilocode](https://kilocode.ai)                                                                                 |
+| `kimi`       | native (`kimi acp`)                                                         | [Kimi CLI](https://github.com/MoonshotAI/kimi-cli)                                                              |
+| `kiro`       | native (`kiro-cli-chat acp`)                                                | [Kiro CLI](https://kiro.dev)                                                                                    |
+| `opencode`   | `npx -y opencode-ai acp`                                                    | [OpenCode](https://opencode.ai)                                                                                 |
+| `qoder`      | native (`qodercli --acp`)                                                   | [Qoder CLI](https://docs.qoder.com/cli/acp)                                                                     |
+| `qwen`       | native (`qwen --acp`)                                                       | [Qwen Code](https://github.com/QwenLM/qwen-code)                                                                |
+| `trae`       | native (`traecli acp serve`)                                                | [Trae CLI](https://docs.trae.cn/cli)                                                                            |
 
 `factory-droid` and `factorydroid` also resolve to the built-in `droid` adapter.
 

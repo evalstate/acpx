@@ -10,6 +10,7 @@ Built-in agents:
 - `cursor -> cursor-agent acp`
 - `copilot -> copilot --acp --stdio`
 - `droid -> droid exec --output-format acp` (`factory-droid` and `factorydroid` also resolve to `droid`)
+- `fast-agent -> fast-agent-acp`
 - `iflow -> iflow --experimental-acp`
 - `kilocode -> npx -y @kilocode/cli acp`
 - `kimi -> kimi acp`
@@ -26,6 +27,7 @@ Harness-specific docs in this directory:
 - [Copilot](Copilot.md): built-in `copilot -> copilot --acp --stdio`
 - [Droid](Droid.md): built-in `droid -> droid exec --output-format acp` with `factory-droid` and `factorydroid` aliases
 - [Cursor](Cursor.md): built-in `cursor -> cursor-agent acp`
+- [FastAgent](FastAgent.md): built-in `fast-agent -> fast-agent-acp`
 - [Gemini](Gemini.md): built-in `gemini -> gemini --acp`
 - [iFlow](Iflow.md): built-in `iflow -> iflow --experimental-acp`
 - [Kilocode](Kilocode.md): built-in `kilocode -> npx -y @kilocode/cli acp`

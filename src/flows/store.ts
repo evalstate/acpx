@@ -430,6 +430,7 @@ function snapshotNode(node: FlowNodeDefinition): FlowDefinitionSnapshot["nodes"]
         cwd: snapshotCwd(node.cwd),
         hasPrompt: true,
         hasParse: typeof node.parse === "function",
+        ...(node.structuredOutput ? { hasStructuredOutput: true } : {}),
       };
     case "compute":
       return {

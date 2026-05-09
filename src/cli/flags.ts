@@ -46,6 +46,7 @@ export type GlobalFlags = PermissionFlags & {
   maxTurns?: number;
   systemPrompt?: SystemPromptOption;
   promptRetries?: number;
+  structuredOutputSchema?: string;
 };
 
 export type PromptFlags = {
@@ -287,6 +288,10 @@ export function addGlobalFlags(command: Command): Command {
       parsePromptRetries,
     )
     .option(
+      "--structured-output-schema <path>",
+      "Request experimental structured output using a JSON Schema file",
+    )
+    .option(
       "--json-strict",
       "Strict JSON mode: requires --format json and suppresses non-JSON stderr output",
     )
@@ -342,7 +347,12 @@ export function resolveSessionNameFromFlags(
 }
 
 export function addPromptInputOption(command: Command): Command {
-  return command.option("-f, --file <path>", "Read prompt text from file path (use - for stdin)");
+  return command
+    .option("-f, --file <path>", "Read prompt text from file path (use - for stdin)")
+    .option(
+      "--structured-output-schema <path>",
+      "Request experimental structured output using a JSON Schema file",
+    );
 }
 
 export function resolveGlobalFlags(command: Command, config: ResolvedAcpxConfig): GlobalFlags {
@@ -376,6 +386,10 @@ export function resolveGlobalFlags(command: Command, config: ResolvedAcpxConfig)
     maxTurns: typeof opts.maxTurns === "number" ? opts.maxTurns : undefined,
     systemPrompt: resolveSystemPromptFlag(opts),
     promptRetries: typeof opts.promptRetries === "number" ? opts.promptRetries : undefined,
+    structuredOutputSchema:
+      typeof opts.structuredOutputSchema === "string"
+        ? parseNonEmptyValue("Structured output schema path", opts.structuredOutputSchema)
+        : undefined,
     approveAll: opts.approveAll ? true : undefined,
     approveReads: opts.approveReads ? true : undefined,
     denyAll: opts.denyAll ? true : undefined,

@@ -1,4 +1,5 @@
 import type { SessionAgentOptions } from "../session/session.js";
+import type { JsonObject } from "../structured-output.js";
 import type {
   AcpJsonRpcMessage,
   AcpMessageDirection,
@@ -56,6 +57,9 @@ export type AcpNodeDefinition = FlowNodeCommon & {
   session?: {
     handle?: string;
     isolated?: boolean;
+  };
+  structuredOutput?: {
+    schema: JsonObject | ((context: FlowNodeContext) => MaybePromise<JsonObject>);
   };
   prompt: (context: FlowNodeContext) => MaybePromise<PromptInput | string>;
   parse?: (text: string, context: FlowNodeContext) => MaybePromise<unknown>;
@@ -144,6 +148,7 @@ export type FlowNodeSnapshot = FlowNodeCommon & {
   actionExecution?: "function" | "shell";
   hasPrompt?: boolean;
   hasParse?: boolean;
+  hasStructuredOutput?: boolean;
   hasRun?: boolean;
   hasExec?: boolean;
 };

@@ -301,6 +301,7 @@ export async function runQueuedTask(
       sessionRecordId,
       mcpServers: options.mcpServers,
       prompt: task.prompt ?? textPrompt(task.message),
+      promptOptions: task.promptOptions,
       permissionMode: task.permissionMode,
       resumePolicy: task.resumePolicy,
       nonInteractivePermissions:
@@ -388,6 +389,7 @@ async function runSessionPrompt(options: RunSessionPromptOptions): Promise<Sessi
   let promptTurnActive = false;
   let promptTurnHadSideEffects = false;
   let sawAcpMessage = false;
+  let emittedOutputMessage = false;
   let eventWriterClosed = false;
 
   const closeEventWriter = async (checkpoint: boolean): Promise<void> => {
@@ -443,6 +445,7 @@ async function runSessionPrompt(options: RunSessionPromptOptions): Promise<Sessi
         pendingConnectOutputMessages.push(message);
         return;
       }
+      emittedOutputMessage = true;
       output.onAcpMessage(message);
     },
     onSessionUpdate: (notification) => {
@@ -509,6 +512,7 @@ async function runSessionPrompt(options: RunSessionPromptOptions): Promise<Sessi
           } catch (error) {
             bufferingConnectOutput = false;
             for (const message of pendingConnectOutputMessages) {
+              emittedOutputMessage = true;
               output.onAcpMessage(message);
             }
             pendingConnectOutputMessages.length = 0;
@@ -521,6 +525,7 @@ async function runSessionPrompt(options: RunSessionPromptOptions): Promise<Sessi
             ? pendingConnectOutputMessages
             : filterRecoverableLoadFallbackOutput(pendingConnectOutputMessages);
         for (const message of connectOutputMessages) {
+          emittedOutputMessage = true;
           output.onAcpMessage(message);
         }
         pendingConnectOutputMessages.length = 0;
@@ -554,6 +559,7 @@ async function runSessionPrompt(options: RunSessionPromptOptions): Promise<Sessi
                 client,
                 sessionId: activeSessionId,
                 prompt: options.prompt,
+                promptOptions: options.promptOptions,
                 timeoutMs: options.timeoutMs,
                 conversation,
                 promptMessageId,
@@ -636,7 +642,8 @@ async function runSessionPrompt(options: RunSessionPromptOptions): Promise<Sessi
 
             const propagated =
               error instanceof Error ? error : new Error(formatErrorMessage(error));
-            (propagated as { outputAlreadyEmitted?: boolean }).outputAlreadyEmitted = sawAcpMessage;
+            (propagated as { outputAlreadyEmitted?: boolean }).outputAlreadyEmitted =
+              emittedOutputMessage;
             (propagated as { normalizedOutputError?: unknown }).normalizedOutputError =
               normalizedError;
             throw propagated;
@@ -768,7 +775,10 @@ export async function runOnce(options: RunOnceOptions): Promise<RunPromptResult>
         for (let attempt = 0; ; attempt++) {
           try {
             response = await measurePerf("runtime.exec.prompt", async () => {
-              return await withTimeout(client.prompt(sessionId, options.prompt), options.timeoutMs);
+              return await withTimeout(
+                client.prompt(sessionId, options.prompt, options.promptOptions),
+                options.timeoutMs,
+              );
             });
             break;
           } catch (error) {
@@ -826,6 +836,7 @@ export async function sendSessionDirect(options: SessionSendOptions): Promise<Se
     timeoutMs: options.timeoutMs,
     suppressSdkConsoleErrors: options.suppressSdkConsoleErrors,
     verbose: options.verbose,
+    promptOptions: options.promptOptions,
     client: options.client,
   });
 }

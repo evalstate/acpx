@@ -16,6 +16,7 @@ import {
   runOnce,
   sendSessionDirect,
 } from "../session/session.js";
+import { isJsonObject, type PromptRequestOptions } from "../structured-output.js";
 import type { PromptInput, SessionRecord } from "../types.js";
 import { acp, action, checkpoint, compute, defineFlow, shell } from "./definition.js";
 import { formatShellActionSummary, runShellAction } from "./executors/shell.js";
@@ -124,6 +125,30 @@ type TracedPromptResult = {
     eventEndSeq: number;
   };
 };
+
+async function resolveStructuredOutputPromptOptions(
+  node: AcpNodeDefinition,
+  context: FlowNodeContext,
+): Promise<PromptRequestOptions | undefined> {
+  const schemaDefinition = node.structuredOutput?.schema;
+  if (schemaDefinition === undefined) {
+    return undefined;
+  }
+
+  const schema =
+    typeof schemaDefinition === "function"
+      ? await Promise.resolve(schemaDefinition(context))
+      : schemaDefinition;
+  if (!isJsonObject(schema)) {
+    throw new Error("ACP structuredOutput.schema must resolve to a JSON object");
+  }
+
+  return {
+    structuredOutput: {
+      schema,
+    },
+  };
+}
 
 export class FlowRunner {
   private readonly resolveAgent;
@@ -629,6 +654,7 @@ export class FlowRunner {
           cwd: await resolveNodeCwd(resolvedAgent.cwd, node.cwd, context),
         };
         const prompt = normalizePromptInput(await Promise.resolve(node.prompt(context)));
+        const promptOptions = await resolveStructuredOutputPromptOptions(node, context);
         const promptText = promptToDisplayText(prompt);
         updateStatusDetail(state, summarizePrompt(promptText, node.statusDetail));
         await this.store.writeLive(runDir, state, {
@@ -686,6 +712,7 @@ export class FlowRunner {
             isolatedBinding,
             agentInfo,
             prompt,
+            promptOptions,
             nodeTimeoutMs,
           );
           const rawResponseArtifact = await this.store.writeArtifact(
@@ -760,6 +787,7 @@ export class FlowRunner {
           state,
           boundSession,
           prompt,
+          promptOptions,
           nodeTimeoutMs,
         );
         const rawResponseArtifact = await this.store.writeArtifact(
@@ -936,6 +964,7 @@ export class FlowRunner {
     state: FlowRunState,
     binding: FlowSessionBinding,
     prompt: PromptInput,
+    promptOptions: PromptRequestOptions | undefined,
     timeoutMs?: number,
   ): Promise<TracedPromptResult> {
     const capture = createQuietCaptureOutput();
@@ -952,6 +981,7 @@ export class FlowRunner {
       await sendSessionDirect({
         sessionId: binding.acpxRecordId,
         prompt,
+        promptOptions,
         resumePolicy: "same-session-only",
         mcpServers: this.mcpServers,
         permissionMode: this.permissionMode,
@@ -1030,6 +1060,7 @@ export class FlowRunner {
     binding: FlowSessionBinding,
     agent: ResolvedFlowAgent,
     prompt: PromptInput,
+    promptOptions: PromptRequestOptions | undefined,
     timeoutMs?: number,
   ): Promise<TracedPromptResult> {
     const capture = createQuietCaptureOutput();
@@ -1043,6 +1074,7 @@ export class FlowRunner {
       agentCommand: agent.agentCommand,
       cwd: agent.cwd,
       prompt,
+      promptOptions,
       mcpServers: this.mcpServers,
       permissionMode: this.permissionMode,
       nonInteractivePermissions: this.nonInteractivePermissions,

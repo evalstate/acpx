@@ -8,6 +8,10 @@ Repo: https://github.com/openclaw/acpx
 
 ### Changes
 
+- Agents/fast-agent: add built-in fast-agent ACP support via `fast-agent -> fast-agent-acp` and document the `fast-agent acp` override path.
+- ACP/structured-output: add `--structured-output-schema` to send the experimental `co.huggingface.structuredOutput` prompt extension, capture the completed assistant text, parse strict JSON, and print the parsed payload.
+- Flows/structured-output: let `acp` flow nodes send an experimental structured-output schema and add a plain-text/structured-output mixed example flow.
+
 ### Breaking
 
 ### Fixes

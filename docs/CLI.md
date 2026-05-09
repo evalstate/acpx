@@ -75,6 +75,8 @@ acpx [global_options] flow run <file> [--input-json <json> | --input-file <path>
 - Persists run artifacts under `~/.acpx/flows/runs/<runId>/`.
 - Reuses one implicit main ACP session by default for non-isolated `acp` nodes.
 - `acp` nodes may override their working directory per step, which lets flows prepare an isolated workspace with an action node and then keep the agent session inside that cwd.
+- `acp` nodes may set `structuredOutput.schema` to send the experimental
+  `co.huggingface.structuredOutput` prompt extension for that step.
 - `acp` and `action` nodes use the global `--timeout` value as their default step timeout. If `--timeout` is omitted, flows default to 15 minutes per active step.
 - Flows may declare permission requirements. If a flow requires an explicit grant such as `approve-all`, `acpx` fails fast before starting the flow and tells you which permission flag to pass.
 - `--input-json` passes flow input inline as JSON.
@@ -117,6 +119,7 @@ All global options:
 | `--timeout <seconds>`                    | Max wait time for agent response               | Must be positive. Decimal seconds allowed.                                                                                                                                                                 |
 | `--ttl <seconds>`                        | Queue owner idle TTL before shutdown           | Default `300`. `0` disables TTL.                                                                                                                                                                           |
 | `--model <id>`                           | Set agent model                                | Claude-compatible adapters may consume session creation metadata; other agents must advertise ACP models and support `session/set_model`, otherwise `acpx` fails clearly instead of silently falling back. |
+| `--structured-output-schema <path>`      | Experimental structured output                 | Sends a JSON Schema through `co.huggingface.structuredOutput`, captures the completed assistant text, parses it as strict JSON, and prints the parsed payload.                                             |
 | `--verbose`                              | Enable verbose logs                            | Prints ACP/debug details to stderr.                                                                                                                                                                        |
 
 Permission flags are mutually exclusive. Using more than one of `--approve-all`, `--approve-reads`, `--deny-all` is a usage error.
@@ -133,6 +136,7 @@ acpx --cwd ~/repos/api codex 'review auth middleware'
 acpx --format json codex exec 'summarize open TODO items'
 acpx --format json --json-strict codex exec 'machine-safe JSON output'
 acpx --no-terminal codex exec 'summarize without terminal capability'
+acpx --agent './my-acp-agent' --structured-output-schema schema.json exec 'extract fields'
 acpx --timeout 120 codex 'investigate flaky test failures'
 acpx --ttl 30 codex 'keep queue owner warm for quick follow-up'
 acpx --verbose codex 'debug adapter startup issues'
@@ -478,6 +482,20 @@ When a prompt is already in flight for a session, `acpx` uses a per-session queu
 - `text`: assistant text, tool status blocks, client-operation logs, plan updates, and `[done] <reason>`
 - `json`: one raw ACP JSON-RPC message per line
 - `quiet`: concatenated assistant text only
+
+When `--structured-output-schema <path>` is used with `prompt` or `exec`, `acpx`:
+
+- reads `<path>` as a JSON Schema object
+- sends it on `session/prompt` using the experimental
+  `co.huggingface.structuredOutput` ACP `_meta` extension
+- requires the agent to advertise `agentCapabilities._meta.co.huggingface.structuredOutput`
+- captures completed assistant text instead of streaming normal prompt output
+- parses the completed text as strict JSON after the prompt finishes
+- prints the parsed payload as JSON (`text` pretty-prints; `json` wraps it in a
+  `structured_output` result object; `quiet` prints compact JSON)
+
+This MVP validates JSON syntax only. It does not validate the parsed payload
+against the supplied schema.
 
 When `--suppress-reads` is enabled:
 

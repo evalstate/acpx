@@ -2,6 +2,7 @@ import type { SetSessionConfigOptionResponse } from "@agentclientprotocol/sdk";
 import { toAcpErrorPayload } from "../../acp/error-shapes.js";
 import { isAcpJsonRpcMessage } from "../../acp/jsonrpc.js";
 import { isPromptInput, textPrompt } from "../../prompt-content.js";
+import { isJsonObject, type PromptRequestOptions } from "../../structured-output.js";
 import {
   OUTPUT_ERROR_CODES,
   OUTPUT_ERROR_ORIGINS,
@@ -27,6 +28,7 @@ export type QueueSubmitRequest = {
   ownerGeneration?: number;
   message: string;
   prompt?: PromptInput;
+  promptOptions?: PromptRequestOptions;
   permissionMode: PermissionMode;
   resumePolicy?: SessionResumePolicy;
   nonInteractivePermissions?: NonInteractivePermissionPolicy;
@@ -247,6 +249,28 @@ function parseOwnerGeneration(value: unknown): number | undefined | null {
   return value;
 }
 
+function parsePromptOptions(value: unknown): PromptRequestOptions | undefined | null {
+  if (value == null) {
+    return undefined;
+  }
+  const options = asRecord(value);
+  if (!options) {
+    return null;
+  }
+  if (options.structuredOutput == null) {
+    return {};
+  }
+  const structuredOutput = asRecord(options.structuredOutput);
+  if (!structuredOutput || !isJsonObject(structuredOutput.schema)) {
+    return null;
+  }
+  return {
+    structuredOutput: {
+      schema: structuredOutput.schema,
+    },
+  };
+}
+
 export function parseQueueRequest(raw: unknown): QueueRequest | null {
   const request = asRecord(raw);
   if (!request) {
@@ -290,11 +314,13 @@ export function parseQueueRequest(raw: unknown): QueueRequest | null {
 
     const prompt =
       request.prompt == null ? undefined : isPromptInput(request.prompt) ? request.prompt : null;
+    const promptOptions = parsePromptOptions(request.promptOptions);
     if (
       typeof request.message !== "string" ||
       !isPermissionMode(request.permissionMode) ||
       resumePolicy === null ||
       prompt === null ||
+      promptOptions === null ||
       nonInteractivePermissions === null ||
       suppressSdkConsoleErrors === null ||
       sessionOptions === null ||
@@ -309,6 +335,7 @@ export function parseQueueRequest(raw: unknown): QueueRequest | null {
       ownerGeneration,
       message: request.message,
       prompt: prompt ?? textPrompt(request.message),
+      ...(promptOptions !== undefined ? { promptOptions } : {}),
       permissionMode: request.permissionMode,
       ...(resumePolicy !== undefined ? { resumePolicy } : {}),
       nonInteractivePermissions,

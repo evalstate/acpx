@@ -46,6 +46,11 @@ import { classifyPermissionDecision, resolvePermissionRequest } from "../permiss
 import { textPrompt } from "../prompt-content.js";
 import { extractRuntimeSessionId } from "../session/runtime-session-id.js";
 import { buildSpawnCommandOptions } from "../spawn-command-options.js";
+import {
+  buildStructuredOutputMeta,
+  isStructuredOutputSupported,
+  type PromptRequestOptions,
+} from "../structured-output.js";
 import type {
   AcpClientOptions,
   NonInteractivePermissionPolicy,
@@ -726,11 +731,19 @@ export class AcpClient {
     };
   }
 
-  async prompt(sessionId: string, prompt: PromptInput | string): Promise<PromptResponse> {
+  async prompt(
+    sessionId: string,
+    prompt: PromptInput | string,
+    options: PromptRequestOptions = {},
+  ): Promise<PromptResponse> {
     const connection = this.getConnection();
     const restoreConsoleError = this.options.suppressSdkConsoleErrors
       ? installSdkConsoleErrorSuppression()
       : undefined;
+    const requestMeta = buildStructuredOutputMeta(options.structuredOutput);
+    if (requestMeta && !isStructuredOutputSupported(this.initResult?.agentCapabilities)) {
+      throw new Error("Agent does not advertise support for co.huggingface.structuredOutput");
+    }
 
     let promptPromise: Promise<PromptResponse>;
     try {
@@ -738,6 +751,7 @@ export class AcpClient {
         connection.prompt({
           sessionId,
           prompt: typeof prompt === "string" ? textPrompt(prompt) : prompt,
+          ...(requestMeta ? { _meta: requestMeta } : {}),
         }),
       );
     } catch (error) {
@@ -858,7 +872,7 @@ export class AcpClient {
   async closeSession(sessionId: string): Promise<void> {
     const connection = this.getConnection();
     await this.runConnectionRequest(() =>
-      connection.closeSession({
+      connection.unstable_closeSession({
         sessionId,
       }),
     );

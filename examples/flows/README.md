@@ -14,6 +14,7 @@ They intentionally use the public authoring surface:
 - `pr-triage/pr-triage.flow.ts`: a larger single-PR workflow example with a colocated written spec in `pr-triage/README.md`
 - `replay-viewer/`: a browser app that visualizes saved flow run bundles with React Flow, a recent-runs picker, ACP session inspection, and a dedicated viewer spec in `docs/2026-03-27-flow-replay-viewer.md`
 - `shell.flow.ts`: one native runtime-owned shell action that returns structured JSON
+- `structured-output.flow.ts`: plain-text ACP turns around one ACP structured-output turn
 - `workdir.flow.ts`: native workspace prep followed by an ACP step that runs inside that isolated cwd
 - `two-turn.flow.ts`: a longer same-session ACP example that inspects the workspace, uses tools, and refines a final answer across multiple steps
 
@@ -31,6 +32,9 @@ acpx --approve-all flow run examples/flows/pr-triage/pr-triage.flow.ts \
 
 acpx flow run examples/flows/shell.flow.ts \
   --input-json '{"text":"hello from shell"}'
+
+acpx --approve-all flow run examples/flows/structured-output.flow.ts \
+  --default-agent fast-agent
 
 acpx flow run examples/flows/workdir.flow.ts
 
@@ -52,3 +56,6 @@ against a live repository.
 
 The PR-triage example declares an explicit `approve-all` requirement, so it
 must be run with `--approve-all`.
+
+The structured-output example requires an ACP agent that advertises the
+experimental `co.huggingface.structuredOutput` extension.

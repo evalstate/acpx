@@ -93,6 +93,7 @@ function detectAgentToken(argv: string[]): AgentTokenScan {
       token === "--model" ||
       token === "--allowed-tools" ||
       token === "--max-turns" ||
+      token === "--structured-output-schema" ||
       token === "--timeout" ||
       token === "--ttl" ||
       token === "--file"
@@ -110,6 +111,7 @@ function detectAgentToken(argv: string[]): AgentTokenScan {
       token.startsWith("--allowed-tools=") ||
       token.startsWith("--max-turns=") ||
       token.startsWith("--json-strict=") ||
+      token.startsWith("--structured-output-schema=") ||
       token.startsWith("--timeout=") ||
       token.startsWith("--ttl=") ||
       token.startsWith("--file=")

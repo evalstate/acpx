@@ -3,6 +3,7 @@ import type { SetSessionConfigOptionResponse } from "@agentclientprotocol/sdk";
 import { normalizeOutputError } from "../../acp/error-normalization.js";
 import { recordPerfDuration } from "../../perf-metrics.js";
 import { textPrompt } from "../../prompt-content.js";
+import type { PromptRequestOptions } from "../../structured-output.js";
 import type {
   AcpClientOptions,
   NonInteractivePermissionPolicy,
@@ -79,6 +80,7 @@ export type QueueTask = {
   requestId: string;
   message: string;
   prompt: PromptInput;
+  promptOptions?: PromptRequestOptions;
   permissionMode: PermissionMode;
   resumePolicy?: SessionResumePolicy;
   nonInteractivePermissions?: NonInteractivePermissionPolicy;
@@ -462,6 +464,7 @@ export class SessionQueueOwner {
         requestId: request.requestId,
         message: request.message,
         prompt: request.prompt ?? textPrompt(request.message),
+        promptOptions: request.promptOptions,
         permissionMode: request.permissionMode,
         resumePolicy: request.resumePolicy,
         nonInteractivePermissions: request.nonInteractivePermissions,
