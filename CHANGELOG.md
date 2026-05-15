@@ -20,6 +20,7 @@ Repo: https://github.com/openclaw/acpx
 - CLI/sessions: checkpoint live assistant and tool updates while prompt turns are still running, so `sessions read` and `sessions history` can show in-flight progress instead of only the submitted prompt. (#314) Thanks @AndroidPoet.
 - Flows: keep external TypeScript flow modules that import `acpx/flows` compatible with current `tsx` loader behavior.
 - Terminal: run no-argument `terminal/create` command lines so agents that send an unsplit command do not fail with `ENOENT`. Thanks @xdjyxu.
+- CLI/config: accept command-local `--format` on `config show` and `config init`.
 
 ## 2026.5.5 (v0.7.0)
 
