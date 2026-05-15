@@ -36,6 +36,7 @@
   },
   "scripts": {
     "build": "tsdown src/cli.ts src/flows.ts src/runtime.ts --format esm --dts --clean --platform node --target node22 --no-fixedExtension",
+    "build:quiet": "tsdown --logLevel silent src/cli.ts src/flows.ts src/runtime.ts --format esm --dts --clean --platform node --target node22 --no-fixedExtension",
     "build:test": "node -e \"require('node:fs').rmSync('dist-test',{recursive:true,force:true})\" && tsgo -p tsconfig.test.json",
     "check": "pnpm run format:check && pnpm run typecheck && pnpm run lint && pnpm run build && pnpm run viewer:typecheck && pnpm run viewer:build && pnpm run test:coverage",
     "check:docs": "pnpm run format:docs:check && pnpm run lint:docs && pnpm run docs:site",
@@ -54,7 +55,7 @@
     "lint:persisted-key-casing": "tsx scripts/lint-persisted-key-casing.ts",
     "perf:report": "tsx scripts/perf-report.ts",
     "precommit": "pnpm exec lint-staged && pnpm run -s build",
-    "prepack": "pnpm run build",
+    "prepack": "tsdown --logLevel silent src/cli.ts src/flows.ts src/runtime.ts --format esm --dts --clean --platform node --target node22 --no-fixedExtension",
     "prepare": "husky",
     "test": "pnpm run build:test && node --test dist-test/test/*.test.js",
     "test:coverage": "pnpm run build:test && node --experimental-test-coverage --test-coverage-exclude=dist-test/test/**/*.js --test-coverage-lines=57 --test-coverage-branches=76 --test-coverage-functions=64 --test dist-test/test/*.test.js",

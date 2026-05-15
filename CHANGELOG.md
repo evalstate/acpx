@@ -24,6 +24,7 @@ Repo: https://github.com/openclaw/acpx
 - CLI/sessions: accept the documented `-s` shorthand on `sessions new` and `sessions ensure`.
 - Replay viewer: add help output for `pnpm viewer --help` without starting a server.
 - Replay viewer: make `pnpm viewer status` and `pnpm viewer stop` dispatch to the requested command instead of always prepending `start`.
+- Package: keep `npm pack --json` output parseable by running the prepack build quietly.
 
 ## 2026.5.5 (v0.7.0)
 
