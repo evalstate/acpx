@@ -2248,17 +2248,39 @@ test("integration: terminal lifecycle create/output/wait/release", async () => {
   });
 });
 
-test("integration: terminal kill leaves no orphan sleep process", async () => {
+test("integration: terminal kill leaves no orphan sleep process", async (t) => {
   await withTempHome(async (homeDir) => {
     const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "acpx-integration-cwd-"));
-    const before = await listSleep60Pids();
+    const sleepSeconds = 4137;
+    let before: Set<number>;
+    try {
+      before = await listSleepPids(sleepSeconds);
+    } catch (error) {
+      if (isProcessListUnavailable(error)) {
+        t.skip("process listing unavailable");
+        return;
+      }
+      throw error;
+    }
 
     try {
-      const result = await runCli([...baseExecArgs(cwd), "kill-terminal sleep 60"], homeDir, {
-        timeoutMs: 25_000,
-      });
+      const result = await runCli(
+        [...baseExecArgs(cwd), `kill-terminal sleep ${sleepSeconds}`],
+        homeDir,
+        {
+          timeoutMs: 25_000,
+        },
+      );
       assert.equal(result.code, 0, result.stderr);
-      await assertNoNewSleep60Processes(before);
+      try {
+        await assertNoNewSleepProcesses(before, sleepSeconds);
+      } catch (error) {
+        if (isProcessListUnavailable(error)) {
+          t.skip("process listing unavailable");
+          return;
+        }
+        throw error;
+      }
     } finally {
       await fs.rm(cwd, { recursive: true, force: true });
     }
@@ -3835,9 +3857,10 @@ async function stopChildProcess(
   });
 }
 
-async function listSleep60Pids(): Promise<Set<number>> {
+async function listSleepPids(seconds: number): Promise<Set<number>> {
   const output = await runCommand("ps", ["-eo", "pid=,args="]);
   const pids = new Set<number>();
+  const sleepPattern = new RegExp(`(^|\\s)sleep ${seconds}(\\s|$)`);
 
   for (const line of output.split("\n")) {
     const match = line.trim().match(/^(\d+)\s+(.*)$/);
@@ -3851,7 +3874,7 @@ async function listSleep60Pids(): Promise<Set<number>> {
       continue;
     }
 
-    if (/(^|\s)sleep 60(\s|$)/.test(commandLine)) {
+    if (sleepPattern.test(commandLine)) {
       pids.add(pid);
     }
   }
@@ -3859,14 +3882,15 @@ async function listSleep60Pids(): Promise<Set<number>> {
   return pids;
 }
 
-async function assertNoNewSleep60Processes(
+async function assertNoNewSleepProcesses(
   baseline: Set<number>,
+  seconds: number,
   timeoutMs = 4_000,
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs;
 
   for (;;) {
-    const current = await listSleep60Pids();
+    const current = await listSleepPids(seconds);
     const leaked = [...current].filter((pid) => !baseline.has(pid));
     if (leaked.length === 0) {
       return;
@@ -3918,6 +3942,14 @@ async function runCommand(command: string, args: string[]): Promise<string> {
       reject(new Error(`${command} ${args.join(" ")} failed (${code}): ${stderr}`));
     });
   });
+}
+
+function isProcessListUnavailable(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  const code = (error as NodeJS.ErrnoException).code;
+  return code === "ENOENT" || code === "EPERM";
 }
 
 function queueOwnerLockPath(homeDir: string, sessionId: string): string {
