@@ -821,6 +821,33 @@ test("integration: factory-droid alias resolves to droid exec --output-format ac
   });
 });
 
+test("integration: built-in fast-agent resolves to uvx fast-agent-mcp acp", async () => {
+  await withTempHome(async (homeDir) => {
+    const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "acpx-integration-cwd-"));
+    const fakeBinDir = await fs.mkdtemp(path.join(os.tmpdir(), "acpx-fake-fast-agent-"));
+
+    try {
+      await writeFakeUvxFastAgentAcp(fakeBinDir);
+
+      const result = await runCli(
+        ["--approve-all", "--cwd", cwd, "--format", "quiet", "fast-agent", "exec", "echo hello"],
+        homeDir,
+        {
+          env: {
+            PATH: `${fakeBinDir}${path.delimiter}${process.env.PATH ?? ""}`,
+          },
+        },
+      );
+
+      assert.equal(result.code, 0, result.stderr);
+      assert.match(result.stdout, /hello/);
+    } finally {
+      await fs.rm(fakeBinDir, { recursive: true, force: true });
+      await fs.rm(cwd, { recursive: true, force: true });
+    }
+  });
+});
+
 test("integration: built-in iflow agent resolves to iflow --experimental-acp", async () => {
   await withTempHome(async (homeDir) => {
     const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "acpx-integration-cwd-"));
@@ -3855,6 +3882,40 @@ async function writeFakeDroidAgent(binDir: string): Promise<void> {
       "  shift",
       "fi",
       'if [ "$1" = "--output-format" ]; then',
+      "  shift",
+      "fi",
+      'if [ "$1" = "acp" ]; then',
+      "  shift",
+      "fi",
+      `exec "${process.execPath}" "${MOCK_AGENT_PATH}" "$@"`,
+      "",
+    ].join("\n"),
+    { encoding: "utf8", mode: 0o755 },
+  );
+}
+
+async function writeFakeUvxFastAgentAcp(binDir: string): Promise<void> {
+  if (process.platform === "win32") {
+    await fs.writeFile(
+      path.join(binDir, "uvx.cmd"),
+      [
+        "@echo off",
+        "setlocal",
+        'if "%~1"=="fast-agent-mcp" shift',
+        'if "%~1"=="acp" shift',
+        `"${process.execPath}" "${MOCK_AGENT_PATH}" %*`,
+        "",
+      ].join("\r\n"),
+      { encoding: "utf8" },
+    );
+    return;
+  }
+
+  await fs.writeFile(
+    path.join(binDir, "uvx"),
+    [
+      "#!/bin/sh",
+      'if [ "$1" = "fast-agent-mcp" ]; then',
       "  shift",
       "fi",
       'if [ "$1" = "acp" ]; then',

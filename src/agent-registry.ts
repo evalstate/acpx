@@ -44,6 +44,7 @@ export const AGENT_REGISTRY: Record<string, string> = {
   cursor: "cursor-agent acp",
   copilot: "copilot --acp --stdio",
   droid: "droid exec --output-format acp",
+  "fast-agent": "uvx fast-agent-mcp acp",
   iflow: "iflow --experimental-acp",
   kilocode: "npx -y @kilocode/cli acp",
   kimi: "kimi acp",

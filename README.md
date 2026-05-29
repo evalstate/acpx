@@ -341,24 +341,25 @@ unless `agentSessionId` is present.
 
 Built-ins:
 
-| Agent      | Adapter                                                                     | Wraps                                                                                                           |
-| ---------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `pi`       | [pi-acp](https://github.com/svkozak/pi-acp)                                 | [Pi Coding Agent](https://github.com/mariozechner/pi)                                                           |
-| `openclaw` | native (`openclaw acp`)                                                     | [OpenClaw ACP bridge](https://github.com/openclaw/openclaw)                                                     |
-| `codex`    | [codex-acp](https://github.com/agentclientprotocol/codex-acp)               | [Codex CLI](https://codex.openai.com)                                                                           |
-| `claude`   | [claude-agent-acp](https://github.com/agentclientprotocol/claude-agent-acp) | [Claude Code](https://claude.ai/code)                                                                           |
-| `gemini`   | native (`gemini --acp`)                                                     | [Gemini CLI](https://github.com/google/gemini-cli)                                                              |
-| `cursor`   | native (`cursor-agent acp`)                                                 | [Cursor CLI](https://cursor.com/docs/cli/acp)                                                                   |
-| `copilot`  | native (`copilot --acp --stdio`)                                            | [GitHub Copilot CLI](https://docs.github.com/copilot/how-tos/copilot-chat/use-copilot-chat-in-the-command-line) |
-| `droid`    | native (`droid exec --output-format acp`)                                   | [Factory Droid](https://www.factory.ai)                                                                         |
-| `iflow`    | native (`iflow --experimental-acp`)                                         | [iFlow CLI](https://github.com/iflow-ai/iflow-cli)                                                              |
-| `kilocode` | `npx -y @kilocode/cli acp`                                                  | [Kilocode](https://kilocode.ai)                                                                                 |
-| `kimi`     | native (`kimi acp`)                                                         | [Kimi CLI](https://github.com/MoonshotAI/kimi-cli)                                                              |
-| `kiro`     | native (`kiro-cli-chat acp`)                                                | [Kiro CLI](https://kiro.dev)                                                                                    |
-| `opencode` | `npx -y opencode-ai acp`                                                    | [OpenCode](https://opencode.ai)                                                                                 |
-| `qoder`    | native (`qodercli --acp`)                                                   | [Qoder CLI](https://docs.qoder.com/cli/acp)                                                                     |
-| `qwen`     | native (`qwen --acp`)                                                       | [Qwen Code](https://github.com/QwenLM/qwen-code)                                                                |
-| `trae`     | native (`traecli acp serve`)                                                | [Trae CLI](https://docs.trae.cn/cli)                                                                            |
+| Agent        | Adapter                                                                     | Wraps                                                                                                           |
+| ------------ | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `pi`         | [pi-acp](https://github.com/svkozak/pi-acp)                                 | [Pi Coding Agent](https://github.com/mariozechner/pi)                                                           |
+| `openclaw`   | native (`openclaw acp`)                                                     | [OpenClaw ACP bridge](https://github.com/openclaw/openclaw)                                                     |
+| `codex`      | [codex-acp](https://github.com/agentclientprotocol/codex-acp)               | [Codex CLI](https://codex.openai.com)                                                                           |
+| `claude`     | [claude-agent-acp](https://github.com/agentclientprotocol/claude-agent-acp) | [Claude Code](https://claude.ai/code)                                                                           |
+| `gemini`     | native (`gemini --acp`)                                                     | [Gemini CLI](https://github.com/google/gemini-cli)                                                              |
+| `cursor`     | native (`cursor-agent acp`)                                                 | [Cursor CLI](https://cursor.com/docs/cli/acp)                                                                   |
+| `copilot`    | native (`copilot --acp --stdio`)                                            | [GitHub Copilot CLI](https://docs.github.com/copilot/how-tos/copilot-chat/use-copilot-chat-in-the-command-line) |
+| `droid`      | native (`droid exec --output-format acp`)                                   | [Factory Droid](https://www.factory.ai)                                                                         |
+| `fast-agent` | `uvx fast-agent-mcp acp`                                                    | [EvalState fast-agent](https://github.com/evalstate/fast-agent)                                                 |
+| `iflow`      | native (`iflow --experimental-acp`)                                         | [iFlow CLI](https://github.com/iflow-ai/iflow-cli)                                                              |
+| `kilocode`   | `npx -y @kilocode/cli acp`                                                  | [Kilocode](https://kilocode.ai)                                                                                 |
+| `kimi`       | native (`kimi acp`)                                                         | [Kimi CLI](https://github.com/MoonshotAI/kimi-cli)                                                              |
+| `kiro`       | native (`kiro-cli-chat acp`)                                                | [Kiro CLI](https://kiro.dev)                                                                                    |
+| `opencode`   | `npx -y opencode-ai acp`                                                    | [OpenCode](https://opencode.ai)                                                                                 |
+| `qoder`      | native (`qodercli --acp`)                                                   | [Qoder CLI](https://docs.qoder.com/cli/acp)                                                                     |
+| `qwen`       | native (`qwen --acp`)                                                       | [Qwen Code](https://github.com/QwenLM/qwen-code)                                                                |
+| `trae`       | native (`traecli acp serve`)                                                | [Trae CLI](https://docs.trae.cn/cli)                                                                            |
 
 `factory-droid` and `factorydroid` also resolve to the built-in `droid` adapter.
 

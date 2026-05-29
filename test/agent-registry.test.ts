@@ -49,6 +49,11 @@ test("kiro built-in uses kiro-cli-chat directly", () => {
   assert.equal(resolveAgentCommand("kiro"), "kiro-cli-chat acp");
 });
 
+test("fast-agent built-in runs the ACP entrypoint through uvx", () => {
+  assert.equal(AGENT_REGISTRY["fast-agent"], "uvx fast-agent-mcp acp");
+  assert.equal(resolveAgentCommand("fast-agent"), "uvx fast-agent-mcp acp");
+});
+
 test("listBuiltInAgents preserves the required example prefix and alphabetical tail", () => {
   const agents = listBuiltInAgents();
   assert.deepEqual(agents, Object.keys(AGENT_REGISTRY));
@@ -63,6 +68,7 @@ test("listBuiltInAgents preserves the required example prefix and alphabetical t
   ]);
   assert.deepEqual(agents.slice(7), [
     "droid",
+    "fast-agent",
     "iflow",
     "kilocode",
     "kimi",
